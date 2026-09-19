@@ -27,23 +27,38 @@ reproduire le projet.
 - **Docker Desktop** avec l'intégration WSL activée (Docker 28.5.1)
 - Une connexion Internet (téléchargement du CLI et de l'image Docker)
 
+---
+
 ## Étape 1 : Installation et lancement de Floci
 
-### 1. Installer Floci
+Floci se compose de deux éléments : le **CLI `floci`**, un outil en ligne de commande
+qui pilote l'émulateur, et l'**émulateur** lui-même, qui tourne dans un conteneur Docker
+(image `floci/floci`). On installe d'abord le CLI, puis on lui demande de démarrer
+l'émulateur.
+
+### 1. Installer le CLI Floci
 
 ```bash
 curl -fsSL https://floci.io/install.sh | sh
 ```
 
-Méthode officielle de <https://floci.io/>. Le script télécharge le CLI `floci`,
-vérifie son checksum et l'installe dans `/usr/local/bin` (d'où le `sudo`).
+Méthode officielle indiquée sur <https://floci.io/>. `curl` télécharge le script
+d'installation (`-f` échoue en cas d'erreur HTTP, `-s` reste silencieux, `-S` affiche
+tout de même les erreurs, `-L` suit les redirections) et `| sh` l'exécute directement.
 
-```text
-Downloading floci 0.2.3 for linux-amd64...
-Checksum verified.
-Installing to /usr/local/bin requires sudo...
-Floci CLI 0.2.3 installed to /usr/local/bin/floci
-```
+![Installation du CLI Floci](screenshots/etape1/install-cli.png)
+
+**Ce que montre la capture :**
+
+- `Downloading floci 0.2.3 for linux-amd64` : le script a détecté mon système (Linux) et
+  mon architecture (amd64), puis a choisi le binaire correspondant, en version **0.2.3**.
+- `Checksum verified` : l'empreinte (checksum) du fichier téléchargé correspond à
+  l'empreinte attendue ; le binaire n'est ni corrompu ni altéré.
+- `Installing to /usr/local/bin requires sudo` : `/usr/local/bin` est un dossier système,
+  réservé à l'administrateur, d'où la demande du mot de passe (`[sudo] password`). Le
+  dossier fait partie du `PATH`, donc la commande `floci` est utilisable depuis
+  n'importe quel répertoire.
+- `Floci CLI 0.2.3 installed to /usr/local/bin/floci` : l'installation est terminée.
 
 ### 2. Démarrer Floci
 
@@ -51,113 +66,179 @@ Floci CLI 0.2.3 installed to /usr/local/bin/floci
 floci start
 ```
 
-```text
-Checking image floci/floci:latest (policy: missing)...
-[...]
-Status: Downloaded newer image for floci/floci:latest
-Starting Floci AWS container...
-Container started (9df8951db794)
-Waiting for Floci AWS to be ready...
-Floci AWS is ready (http://localhost:4566)
-```
+![Démarrage de Floci](screenshots/etape1/floci-start.png)
 
-Le CLI télécharge l'image Docker `floci/floci` (seulement si elle est absente), puis
-lance un conteneur nommé `floci`.
+**Ce que montre la capture :**
 
-### 3. Configurer le terminal
+- `Checking image floci/floci:latest (policy: missing)` : le CLI cherche l'image Docker
+  de l'émulateur. La politique `missing` signifie qu'elle n'est téléchargée **que si
+  elle est absente** de la machine.
+- `Pulling from floci/floci` et les lignes `Pull complete` : une image Docker est
+  composée de couches (*layers*) téléchargées séparément ; chaque `Pull complete`
+  indique qu'une couche est prête.
+- `Digest: sha256:f5aa8c18…` : empreinte unique de la version exacte de l'image
+  téléchargée.
+- `Status: Downloaded newer image for floci/floci:latest` : l'image a bien été
+  téléchargée (c'est le premier lancement).
+- `Starting Floci AWS container...` puis `Container started (9df8951db794)` : le
+  conteneur est créé et démarré ; `9df8951db794` est son identifiant.
+- `Floci AWS is ready (http://localhost:4566)` : le CLI a attendu que l'émulateur
+  réponde et donne son adresse.
 
-```bash
-eval $(floci env)
-```
+Le mot **AWS** dans ces messages confirme que c'est l'émulateur du provider choisi qui
+a été lancé.
 
-Cette commande exporte dans le terminal courant les variables d'environnement AWS
-pointant vers Floci (endpoint local, région, identifiants factices). Elles sont perdues
-à la fermeture du terminal.
+### 3. Identifier le port utilisé par le provider choisi
 
-### 4. Identifier le port du provider choisi
+Le CLI Floci choisit le provider **par la commande de démarrage** :
 
-Le provider se choisit par la commande de démarrage du CLI :
-
-| Provider | Commande | Port |
+| Provider | Commande de démarrage | Port |
 |---|---|---|
 | **AWS** (choisi) | `floci start` | **4566** |
 | Azure | `floci az start` | 4577 |
 | GCP | `floci gcp start` | 4588 |
 | OCI | `floci oci start` | 4599 |
 
-En lançant `floci start`, j'ai démarré l'émulateur **AWS**, accessible sur
-**http://localhost:4566**.
+Chaque provider est un émulateur distinct, avec sa propre image et son propre port. En
+lançant `floci start` sans sous-commande, j'ai démarré l'émulateur **AWS**, dont le
+port est **4566**. Je le vérifie avec Docker :
+
+```bash
+docker port floci
+```
+
+![Ports publiés par le conteneur floci](screenshots/etape1/docker-port.png)
+
+**Ce que montre la capture :** la commande affiche les ports que le conteneur `floci`
+expose sur ma machine. La ligne `4566/tcp -> 0.0.0.0:4566` signifie que le port 4566
+(TCP) du conteneur est accessible sur le port 4566 de ma machine, sur toutes les
+interfaces IPv4 ; la ligne `[::]:4566` correspond à la même chose en IPv6. Le port de
+l'émulateur AWS est donc bien **4566**.
+
+### 4. Configurer le terminal
+
+```bash
+eval $(floci env)
+env | grep -i aws | grep -viE 'key|secret|token'
+```
+
+`floci env` affiche des commandes `export` ; `eval` les exécute dans le terminal
+courant, ce qui explique que la première commande n'affiche rien. La seconde vérifie le
+résultat en deux filtres :
+
+- `env` liste toutes les variables d'environnement, et `grep -i aws` ne garde que les
+  lignes contenant « aws » (sans tenir compte de la casse) ;
+- `grep -viE 'key|secret|token'` **exclut** ensuite toute ligne contenant « key »,
+  « secret » ou « token », pour ne jamais afficher d'identifiants.
+
+Ce second filtre est volontaire : par bonne pratique, aucun identifiant ne doit figurer
+dans un README ou une capture d'écran. Ici les identifiants définis par Floci sont
+factices, mais la même commande sans filtre afficherait de vraies clés AWS si j'en avais
+configuré sur ma machine.
+
+![Variables d'environnement AWS définies par floci env (identifiants masqués)](screenshots/etape1/floci-env.png)
+
+**Ce que montre la capture :** les variables non sensibles définies par `floci env`.
+D'après la documentation de Floci, on y retrouve :
+
+- `AWS_ENDPOINT_URL=http://localhost:4566` : l'adresse à laquelle les outils AWS envoient
+  leurs requêtes. C'est cette variable qui les redirige vers Floci au lieu du vrai AWS
+  (notion d'**endpoint local**) ;
+- la région par défaut (`us-east-1`).
+
+`floci env` définit aussi un identifiant d'accès et une clé secrète, volontairement non
+affichés. Selon la documentation de Floci, ce sont des valeurs **factices** : l'émulateur
+accepte n'importe quelle valeur non vide, donc aucun vrai compte n'est utilisé. Avec le
+vrai AWS, en revanche, ces clés sont de vrais secrets qu'il ne faut jamais commiter, ce
+que le `.gitignore` du projet prévoit (`*.pem`, `*.key`, fichiers d'identifiants).
+
+Ces variables sont perdues à la fermeture du terminal : il faut relancer
+`eval $(floci env)` dans chaque nouveau terminal.
 
 ### 5. Vérifier que le service fonctionne
 
-**Diagnostic du CLI**
+La vérification est faite à quatre niveaux, du plus technique au plus visuel.
+
+#### a) Diagnostic du CLI
 
 ```bash
 floci doctor
 ```
 
-```text
-Floci AWS Doctor — checking your environment
+![Résultat de floci doctor](screenshots/etape1/floci-doctor.png)
 
-  ✓ docker.installed           Docker 28.5.1 detected
-  ✓ docker.daemon              Daemon reachable
-  ✓ docker.socket              /var/run/docker.sock accessible
-  ✓ docker.version             Docker 28.5.1 (>= 20.10)
-  ✓ port.available             Port 4566 in use by container 'floci' (expected)
-  ✓ image.present              floci/floci image present locally
-  ✓ image.version              Server image version 2.1.0 (>= 1.5.0)
-  ✓ container.running          Container 'floci' is running
-  ✓ endpoint.reachable         http://localhost:4566 is reachable (server v2.1.0)
-  ✓ aws.cli.endpoint           aws CLI not installed — skipped
-  ✓ aws.cli.s3.pathstyle       ~/.aws/config not found — skipped
+**Ce que montre la capture :** onze contrôles, tous marqués ✓, et le message
+`All checks passed.` En détail :
 
-All checks passed.
-```
+- `docker.installed`, `docker.daemon`, `docker.version` : Docker 28.5.1 est installé, son
+  service répond, et sa version est suffisante (≥ 20.10 requis).
+- `docker.socket` : le socket `/var/run/docker.sock` est accessible. Floci en a besoin
+  pour piloter Docker (il lance ses conteneurs et certains services).
+- `port.available` : le port 4566 est déjà utilisé, mais par le conteneur `floci`
+  lui-même, ce qui est le comportement attendu (`expected`).
+- `image.present` et `image.version` : l'image `floci/floci` est présente localement et le
+  serveur est en version **2.1.0** (≥ 1.5.0 requis).
+- `container.running` : le conteneur `floci` tourne.
+- `endpoint.reachable` : `http://localhost:4566` répond (serveur v2.1.0).
+- `aws.cli.endpoint`, `aws.cli.s3.pathstyle` : ignorés (`skipped`) car le CLI AWS n'est
+  pas installé ; cela n'empêche pas Floci de fonctionner.
 
-**État du conteneur**
+#### b) État du conteneur Docker
 
 ```bash
 docker ps
 ```
 
-```text
-CONTAINER ID   IMAGE                COMMAND                  CREATED          STATUS                    PORTS                                         NAMES
-9df8951db794   floci/floci:latest   "/usr/local/bin/dock…"   10 minutes ago   Up 10 minutes (healthy)   0.0.0.0:4566->4566/tcp, [::]:4566->4566/tcp   floci
-```
+![Conteneur floci dans docker ps](screenshots/etape1/docker-ps.png)
 
-Le conteneur `floci` est `Up (healthy)` et le port 4566 est publié.
+**Ce que montre la capture :** la liste des conteneurs en cours d'exécution, avec une
+seule ligne, `floci` :
 
-**Réponse de l'API**
+- `IMAGE floci/floci:latest` : l'image utilisée ;
+- `STATUS Up … (healthy)` : le conteneur tourne et son contrôle de santé interne réussit ;
+- `PORTS 0.0.0.0:4566->4566/tcp, [::]:4566->4566/tcp` : le port 4566 est publié (IPv4
+  et IPv6), ce qui confirme la vérification de l'étape 3 ;
+- `NAMES floci` : nom du conteneur.
+
+#### c) Réponse de l'API de santé
 
 ```bash
 curl http://localhost:4566/_floci/health
 ```
 
-```text
-{"version":"2.1.0","edition":"community","services":{"ssm":"running","sqs":"running","s3":"running","dynamodb":"running", ...
-```
+![Réponse de l'API de santé de Floci](screenshots/etape1/health.png)
 
-*(sortie abrégée)* Le serveur répond en version 2.1.0 et tous les services listés,
-dont `s3`, `dynamodb` et `secretsmanager`, sont en `running`.
+**Ce que montre la capture :** `curl` envoie une requête HTTP à l'émulateur, qui répond
+en JSON :
 
-**Navigateur** : <http://localhost:4566> affiche la page d'accueil de Floci
-(statut **ready**, région `us-east-1`, version `2.1.0`, **121 services running**).
+- `"version":"2.1.0"` : version du serveur Floci ;
+- `"edition":"community"` : édition gratuite ;
+- `"services":{…}` : l'état de chaque service émulé. `"running"` signifie que le service
+  est démarré et prêt. On y trouve notamment `s3`, `dynamodb` et `secretsmanager`, qui
+  pourront servir au projet.
 
-### Captures d'écran
+#### d) Page d'accueil dans le navigateur
 
-- Floci dans le navigateur : [screenshots/floci.png](screenshots/floci.png)
-- Floci dans le terminal (`floci doctor` et `docker ps`) : [screenshots/floci-terminal.png](screenshots/floci-terminal.png)
+Ouvrir <http://localhost:4566> dans le navigateur.
 
-![Floci dans le navigateur](screenshots/floci.png)
+![Floci en fonctionnement dans le navigateur](screenshots/floci.png)
 
-![Floci dans le terminal](screenshots/floci-terminal.png)
+**Ce que montre la capture :**
 
-## Dépannage
+- `ready` : l'émulateur est prêt ;
+- `Endpoint http://localhost:4566` : l'adresse et le port de l'API ;
+- `Region us-east-1 (default)` : région par défaut de l'émulateur ;
+- `Account 000000000000` : identifiant de compte par défaut. Floci l'utilise lorsque la
+  clé d'accès n'est pas un identifiant de 12 chiffres, ce qui est le cas de `test` ;
+- `Version 2.1.0 · community` : version et édition du serveur ;
+- `Services 121 running · 0 available` : 121 services émulés, tous démarrés.
 
-**`floci start` : `lookup registry-1.docker.io: no such host`**
-Docker ne pouvait pas télécharger l'image depuis Docker Hub : c'était un problème de
-connexion Internet (DNS), pas de Floci. Après rétablissement de la connexion,
-`floci start` a fonctionné.
+**Conclusion :** les quatre vérifications concordent. Floci (AWS) est installé, démarré
+dans le conteneur `floci`, joignable sur le port **4566**, et ses services sont
+opérationnels.
+
+
+---
 
 ## Notes
 
