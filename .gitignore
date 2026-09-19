@@ -1,0 +1,10 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+
+# Credentials
+google-credential.json
+service-account-key.json
+*.pem
+*.key
