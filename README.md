@@ -138,7 +138,7 @@ configuré sur ma machine.
 ![Variables d'environnement AWS définies par floci env (identifiants masqués)](screenshots/etape1/floci-env.png)
 
 **Ce que montre la capture :** les variables non sensibles définies par `floci env`.
-D'après la documentation de Floci, on y retrouve :
+ On y retrouve :
 
 - `AWS_ENDPOINT_URL=http://localhost:4566` : l'adresse à laquelle les outils AWS envoient
   leurs requêtes. C'est cette variable qui les redirige vers Floci au lieu du vrai AWS
