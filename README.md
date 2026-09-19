@@ -23,9 +23,8 @@ reproduire le projet.
 ## Prérequis
 
 - Windows avec **WSL2 (Ubuntu)** ; toutes les commandes sont exécutées dans le terminal
-  Ubuntu, depuis `~/cloud-project`
-- **Docker Desktop** avec l'intégration WSL activée (Docker 28.5.1)
-- Une connexion Internet (téléchargement du CLI et de l'image Docker)
+  Ubuntu
+- **Docker Desktop** avec l'intégration WSL activée 
 
 ---
 
