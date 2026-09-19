@@ -14,17 +14,26 @@ reproduire le projet.
 - [Notes](#notes)
 - [Références](#références)
 
+
 ## Provider choisi
 
 - **Provider : AWS**, émulé localement par Floci.
-- **Services :** ils seront choisis et justifiés à l'étape 3, après l'exploration de
-  Floci UI.
+- **Service 1 : Amazon S3** (stockage d'objets), déployé avec le module `storage`.
+- **Service 2 : Amazon DynamoDB** (base de données NoSQL clé-valeur), déployé avec le module `database`.
 
-## Prérequis
+**Pourquoi ces deux services :**
 
-- Windows avec **WSL2 (Ubuntu)** ; toutes les commandes sont exécutées dans le terminal
-  Ubuntu
-- **Docker Desktop** avec l'intégration WSL activée 
+- **Supportés par Floci** : l'API de santé (`/_floci/health`) indique `s3` et `dynamodb`
+  en `running`.
+- **Visibles dans Floci UI** : la console propose une page **Storage** (S3) et une page
+  **DynamoDB**, ce qui permet de vérifier les ressources après `terraform apply` puis
+  après `terraform destroy`, comme le demande le sujet.
+- **Complémentaires** : deux modèles de données différents, des objets (fichiers) d'un
+  côté, des enregistrements clé-valeur de l'autre.
+- **Simples à décrire avec Terraform** : une ressource principale chacun
+  (`aws_s3_bucket`, `aws_dynamodb_table`), ce qui permet de se concentrer sur
+  l'organisation du projet (modules, variables, locals, outputs).
+
 
 ---
 
@@ -232,10 +241,119 @@ Ouvrir <http://localhost:4566> dans le navigateur.
 - `Version 2.1.0 · community` : version et édition du serveur ;
 - `Services 121 running · 0 available` : 121 services émulés, tous démarrés.
 
-**Conclusion :** les quatre vérifications concordent. Floci (AWS) est installé, démarré
+Floci (AWS) est installé, démarré
 dans le conteneur `floci`, joignable sur le port **4566**, et ses services sont
 opérationnels.
 
+
+---
+
+## Étape 2 : Lancement de Floci UI
+
+**Floci UI** est une console web, dans le style de la console AWS, qui permet
+d'explorer les services de l'environnement local. Dans ce projet, elle sert à
+**explorer et vérifier** les ressources : celles-ci seront créées avec Terraform, pas
+depuis l'interface.
+
+### 1. Lancer Floci UI
+
+Aucune installation supplémentaire n'est nécessaire : Floci lance l'interface à la
+demande. Depuis la page d'accueil de Floci (<http://localhost:4566>), cliquer sur le
+bouton **Open Floci UI**.
+
+![Bouton d'ouverture de Floci UI sur la page d'accueil de Floci](screenshots/etape2/open-ui-button.png)
+
+**Ce que montre la capture :** en bas de la page, une note indique que l'interface
+utilisateur se lance à la demande, sous forme de **conteneur annexe (*sidecar*)**, lors
+de la première ouverture. Floci démarre donc lui-même un second conteneur pour l'UI. Cela
+est possible car Floci a accès au socket Docker de la machine (contrôle `docker.socket` de
+`floci doctor` à l'étape 1).
+
+Vérification :
+
+```bash
+docker ps
+```
+
+![Conteneurs floci et floci-ui dans docker ps](screenshots/etape2/docker-ps.png)
+
+**Ce que montre la capture :** deux conteneurs actifs.
+
+- `floci` (image `floci/floci:latest`) : l'émulateur AWS, port **4566**, actif depuis
+  l'étape 1 et `healthy`.
+- `floci-ui` : l'interface web, port **4500** (`0.0.0.0:4500->4500/tcp`), créé quelques
+  minutes plus tôt, au moment du clic sur le bouton. Sa présence confirme le mécanisme
+  de conteneur annexe.
+
+### 2. Accéder à l'interface Web
+
+Ouvrir <http://localhost:4500> : la console redirige vers
+`http://localhost:4500/console/aws`.
+
+![Accueil de la console Floci UI, provider AWS](screenshots/floci-ui.png)
+
+**Ce que montre la capture :** la page **Console Home**, accueil de la console.
+
+- **Connexion** : l'indicateur vert *Connected* affiche `http://172.17.0.2:4566`. C'est
+  l'adresse de l'émulateur telle que la voit le conteneur `floci-ui` : l'IP du conteneur
+  `floci` sur le réseau interne de Docker. Depuis l'intérieur du conteneur de l'UI,
+  `localhost` désignerait le conteneur de l'UI lui-même, d'où cette adresse.
+- **Compte** : `0000-0000-0000`, identifiant de compte factice de l'émulateur (le même
+  que `000000000000` sur la page d'accueil de Floci).
+- **Chaîne de fonctionnement** : les quatre cartes sous le bandeau détaillent le trajet
+  d'une requête : interface *Console Home* → proxy `/api/clouds` → adaptateur *AWS* →
+  runtime *Floci AWS Core*.
+
+### 3. Identifier le Cloud Provider choisi
+
+Le provider choisi est **AWS** (voir la capture ci-dessus) :
+
+- le sélecteur de cloud en haut à droite propose **AWS**, Azure et GCP ; **AWS** est
+  sélectionné ;
+- le bandeau indique **AWS Local Runtime**, et la carte *Cloud* affiche AWS avec l'endpoint
+  `http://172.17.0.2:4566` ;
+- la barre latérale liste les services du provider (section *Cloud Services · AWS*) ;
+- l'URL contient le provider : `/console/aws`.
+
+Azure et GCP sont proposés par l'interface mais dépendent d'émulateurs distincts
+(`floci az`, `floci gcp`) qui ne sont pas lancés dans ce projet.
+
+### 4. Explorer les services disponibles
+
+La page d'accueil résume l'état du runtime : *Reachable runtime* (l'émulateur répond),
+**19 services actifs sur 21 disponibles**, et **13 ressources** déjà présentes avant tout
+déploiement. Elles ne viennent pas de mon projet : c'est l'état de référence de
+l'environnement.
+
+La barre latérale liste les services, regroupés par catégorie :
+
+| Catégorie | Services affichés |
+|---|---|
+| Compute | Compute, EKS, Serverless, Containers *(bientôt disponible)* |
+| Storage | **Storage** (S3) |
+| Databases | Database, **DynamoDB** |
+| Networking | Networking, ELB |
+| Integration | SQS, API Gateway, EventBridge, Step Functions, Cloud Scheduler *(bientôt disponible)* |
+| Provisioning | CloudFormation |
+
+Chaque service disponible est aussi représenté par une carte sur la page d'accueil
+(*available*). Deux entrées portent la mention *coming soon* : Containers et Cloud
+Scheduler.
+
+### 5. Identifier les deux services du projet Terraform
+
+Les deux services retenus (voir [Provider choisi](#provider-choisi)) se retrouvent dans
+la console :
+
+| Service Terraform | Page de la console Floci UI |
+|---|---|
+| Amazon S3 | **Storage** |
+| Amazon DynamoDB | **DynamoDB** |
+
+> Remarque : le README du dépôt `floci-ui` indique que DynamoDB n'est pas encore intégré
+> à la vue unifiée *Cloud Explorer*. Dans la version installée ici, DynamoDB dispose
+> néanmoins d'une entrée dédiée dans la barre latérale, ce qui permet de l'utiliser pour
+> la vérification.
 
 ---
 
