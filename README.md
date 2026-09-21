@@ -10,7 +10,9 @@ reproduire le projet.
 - [Provider choisi](#provider-choisi)
 - [Prérequis](#prérequis)
 - [Étape 1 : Installation et lancement de Floci](#étape-1--installation-et-lancement-de-floci)
-- [Dépannage](#dépannage)
+- [Étape 2 :  Lancement de Floci UI](#étape-2--lancement-de-floci-ui)
+- [Étape 3 :  Choix du provider et des services](#étape-3--choix-du-provider-et-des-services)
+- [Étape 4 : Création du projet Terraform](#étape-4--création-du-projet-terraform)
 - [Notes](#notes)
 - [Références](#références)
 
@@ -356,6 +358,175 @@ la console :
 > la vérification.
 
 ---
+
+
+## Étape 3 : Choix du provider et des services
+
+Le choix (AWS, avec Amazon S3 et Amazon DynamoDB) et sa justification figurent dans la
+section [Provider choisi](#provider-choisi).
+
+---
+
+## Étape 4 : Création du projet Terraform
+
+### 1. Installer Terraform
+
+Procédure officielle de HashiCorp, tutoriel *Install Terraform*
+(onglet *Package manager*, puis *Linux*, puis *Ubuntu/Debian*) :
+<https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli>
+
+Terraform est installé depuis le **dépôt de paquets officiel de HashiCorp** : les paquets
+sont signés, et `apt` pourra ensuite proposer les mises à jour.
+
+#### a) Préparer le système
+
+```bash
+sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+```
+
+![Préparation du système : gnupg et software-properties-common](screenshots/etape4/prerequis-apt.png)
+
+**Ce que montre la capture :**
+
+- `apt-get update` rafraîchit la liste des paquets disponibles depuis les dépôts Ubuntu
+  (`noble` est le nom de code d'Ubuntu 24.04).
+- `gnupg is already the newest version` : `gnupg` était déjà installé et à jour. Il sert
+  à vérifier la signature des paquets HashiCorp.
+- `2 upgraded, 0 newly installed` : `software-properties-common` (et sa dépendance
+  `python3-software-properties`) est passé de la version 0.99.49.2 à 0.99.49.4. Ce paquet
+  fournit les outils de gestion des dépôts `apt`. Les 82 autres mises à jour disponibles
+  ne sont pas touchées.
+- Les messages `debconf: unable to initialize frontend: Dialog` sont sans gravité : la
+  fenêtre du terminal est trop petite pour l'interface Dialog, `debconf` bascule donc sur
+  une interface en ligne (`Readline`) et l'installation continue.
+
+#### b) Ajouter et vérifier la clé de signature de HashiCorp
+
+```bash
+wget -O- https://apt.releases.hashicorp.com/gpg | \
+gpg --dearmor | \
+sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+```
+
+Ce que fait cette commande, en trois temps :
+
+1. `wget -O-` télécharge la clé publique de HashiCorp et l'envoie sur la sortie standard.
+2. `gpg --dearmor` la convertit du format texte au format binaire attendu par `apt`.
+3. `sudo tee ... > /dev/null` l'écrit dans `/usr/share/keyrings/` (dossier réservé à
+   l'administrateur, d'où `sudo`) sans réafficher son contenu.
+
+Vérification de l'empreinte de la clé, demandée par la documentation :
+
+```bash
+gpg --no-default-keyring \
+--keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg \
+--fingerprint
+```
+
+![Téléchargement de la clé GPG et vérification de son empreinte](screenshots/etape4/cle-gpg.png)
+
+**Ce que montre la capture :**
+
+- `HTTP request sent, awaiting response... 200 OK` et `Length: 1725` : la clé (1725 octets)
+  a été téléchargée correctement.
+- `gpg: directory '/home/aida/.gnupg' created` : première utilisation de `gpg` sur cette
+  machine, son dossier de configuration est créé automatiquement.
+- `pub rsa4096 2026-09-09 [SC] [expires: 2031-09-08]` : clé RSA de 4096 bits, destinée à la
+  signature et à la certification (`SC`), créée le 9 septembre 2026, valable jusqu'au
+  8 septembre 2031.
+- `D55C 0D1A C78A 8D81 26CB 631C FC9C A96A CA02 6560` : l'**empreinte** de la clé, son
+  identifiant unique.
+- `uid ... HashiCorp Security (HashiCorp Package Signing)` : le propriétaire de la clé,
+  identique à celui que montre la documentation officielle. La mention `[unknown]` signifie
+  seulement qu'aucune relation de confiance n'est configurée localement pour cette clé,
+  ce qui est normal ici.
+
+#### c) Ajouter le dépôt officiel
+
+```bash
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update
+```
+
+La première commande construit une ligne de dépôt et l'enregistre dans
+`/etc/apt/sources.list.d/hashicorp.list`. Ses éléments :
+
+- `arch=$(dpkg --print-architecture)` : l'architecture de la machine (`amd64`) ;
+- `signed-by=...hashicorp-archive-keyring.gpg` : `apt` n'accepte de ce dépôt que des
+  paquets signés avec la clé vérifiée à l'étape précédente ;
+- `https://apt.releases.hashicorp.com` : l'adresse du dépôt HashiCorp ;
+- `$(grep ... || lsb_release -cs)` : le nom de code de ma version d'Ubuntu, ici `noble` ;
+- `main` : la section du dépôt.
+
+![Ajout du dépôt HashiCorp et mise à jour d'apt](screenshots/etape4/depot-apt.png)
+
+**Ce que montre la capture :** la ligne enregistrée, `deb [arch=amd64 signed-by=...]
+https://apt.releases.hashicorp.com noble main`, puis `apt update` qui télécharge pour la
+première fois l'index du dépôt HashiCorp (`noble InRelease` et `noble/main amd64
+Packages`). `apt` connaît désormais les paquets HashiCorp.
+
+#### d) Installer Terraform et vérifier
+
+```bash
+sudo apt-get install terraform
+terraform version
+```
+
+![Installation de Terraform et vérification de la version](screenshots/etape4/install-terraform.png)
+
+**Ce que montre la capture :**
+
+- `The following NEW packages will be installed: terraform` : un seul paquet est installé.
+- `terraform amd64 1.16.3-1 [35.8 MB]` : `apt` télécharge la version **1.16.3** depuis
+  `apt.releases.hashicorp.com`, ce qui prouve que l'installation vient bien du dépôt
+  officiel. Elle occupe environ 120 Mo sur le disque.
+- `Setting up terraform (1.16.3-1)` : l'installation est terminée.
+- `terraform version` répond `Terraform v1.16.3 on linux_amd64` : la commande `terraform`
+  est utilisable, en version 1.16.3, sur Linux 64 bits.
+
+### 2. Créer la structure du projet
+
+```bash
+cd ~/cloud-project
+mkdir -p modules/storage modules/database
+touch main.tf providers.tf variables.tf locals.tf outputs.tf versions.tf terraform.tfvars
+touch modules/storage/{main,variables,outputs}.tf
+touch modules/database/{main,variables,outputs}.tf
+```
+
+- `mkdir -p` crée les dossiers des deux modules (`-p` crée aussi les dossiers parents et
+  ne signale pas d'erreur s'ils existent).
+- `touch` crée les fichiers vides. `{main,variables,outputs}` est une expansion de
+  l'interpréteur : une seule commande crée les trois fichiers.
+- Ces commandes n'affichent rien quand elles réussissent. La vérification se fait avec :
+
+```bash
+find . -path ./.git -prune -o -type f -name '*.tf*' -print | sort
+```
+
+![Structure du projet Terraform](screenshots/etape4/structure.png)
+
+**Ce que montre la capture :** les **13 fichiers** attendus : 7 à la racine
+(`main.tf`, `providers.tf`, `variables.tf`, `locals.tf`, `outputs.tf`, `versions.tf`,
+`terraform.tfvars`) et 3 dans chacun des deux modules, `modules/storage/` et
+`modules/database/` (`main.tf`, `variables.tf`, `outputs.tf`). `-path ./.git -prune` exclut
+le dossier `.git` de la recherche.
+
+Rôle de chaque fichier (Terraform lit tous les fichiers `.tf` d'un dossier comme une seule
+configuration ; les noms sont une convention) :
+
+| Fichier | Rôle |
+|---|---|
+| `main.tf` | Appelle les deux modules |
+| `providers.tf` | Configure le provider AWS avec l'endpoint local de Floci |
+| `variables.tf` | Déclare les variables (nom, type, description) |
+| `terraform.tfvars` | Donne les valeurs des variables, chargé automatiquement |
+| `locals.tf` | Valeurs calculées à partir des variables |
+| `outputs.tf` | Expose les informations importantes après le déploiement |
+| `versions.tf` | Fixe les versions de Terraform et du provider |
+| `modules/storage/` | Module du service S3 (`main.tf`, `variables.tf`, `outputs.tf`) |
+| `modules/database/` | Module du service DynamoDB (`main.tf`, `variables.tf`, `outputs.tf`) |
+
 
 ## Notes
 
