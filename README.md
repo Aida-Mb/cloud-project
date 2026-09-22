@@ -528,6 +528,98 @@ configuration ; les noms sont une convention) :
 | `modules/database/` | Module du service DynamoDB (`main.tf`, `variables.tf`, `outputs.tf`) |
 
 
+---
+
+## Étape 5 : Configuration du provider
+
+Fichiers concernés : [`versions.tf`](versions.tf), [`variables.tf`](variables.tf),
+[`terraform.tfvars`](terraform.tfvars), [`providers.tf`](providers.tf).
+
+### 1. `versions.tf` — fixer les versions
+
+Fixe la version minimale de Terraform (`>= 1.5.0`, Terraform installé : v1.16.3) et
+indique où télécharger le provider AWS (`hashicorp/aws`, série `~> 5.0`, c'est-à-dire
+toute version 5.x mais pas 6.x).
+
+### 2. `variables.tf` et `terraform.tfvars` — variables du provider
+
+Deux variables sont nécessaires pour que le provider sache où envoyer ses requêtes :
+
+| Variable | Valeur (`terraform.tfvars`) | Rôle |
+|---|---|---|
+| `aws_region` | `us-east-1` | Région des ressources ; région par défaut de Floci |
+| `floci_endpoint` | `http://localhost:4566` | Adresse de l'émulateur, identifiée à l'étape 1 |
+
+`variables.tf` **déclare** ces variables (nom, type, description) ; `terraform.tfvars`
+leur donne une valeur. Ce dernier est chargé automatiquement par Terraform, sans option
+en ligne de commande, car il porte ce nom réservé.
+
+### 3. `providers.tf` — rediriger Terraform vers Floci
+
+Ce fichier configure le provider `aws` pour qu'il envoie ses requêtes à Floci au lieu des
+serveurs officiels d'AWS. Trois idées principales :
+
+- **Un bloc `endpoints`**, avec une entrée pour `s3` et une pour `dynamodb`, chacune
+  pointant vers `var.floci_endpoint`. C'est ce bloc qui redirige les appels : sans lui,
+  Terraform contacterait le vrai AWS. C'est la notion d'**endpoint local**.
+- **Des identifiants factices** (`access_key` et `secret_key`) : Floci accepte n'importe
+  quelle valeur non vide, ce ne sont pas de vrais secrets.
+- **Trois options qui désactivent des vérifications inutiles en local** :
+  `skip_credentials_validation` (pas d'appel au service STS), `skip_metadata_api_check`
+  (pas de recherche du service de métadonnées, propre aux vraies instances EC2), et
+  `skip_requesting_account_id` (pas de récupération de l'identifiant de compte pour
+  construire des ARN ; sans impact ici, ni S3 ni DynamoDB n'en ont besoin).
+
+Une quatrième option, `s3_use_path_style`, adresse les buckets en
+`http://localhost:4566/bucket` : le style par défaut (`bucket.localhost:4566`) ne
+fonctionnerait pas en local.
+
+### 4. Initialiser et valider
+
+```bash
+terraform fmt
+terraform init
+terraform validate
+```
+
+![terraform init et terraform validate](screenshots/etape5/init-validate.png)
+
+**Ce que montre la capture :**
+
+- `terraform fmt` ne renvoie rien : les fichiers étaient déjà correctement indentés.
+- `terraform init` :
+  - `Finding hashicorp/aws versions matching "~> 5.0"...` : Terraform cherche, parmi
+    toutes les versions du provider AWS, celles compatibles avec la contrainte fixée
+    dans `versions.tf` ;
+  - `Installing hashicorp/aws v5.100.0...` puis `Installed ... (signed by HashiCorp)` :
+    la version **5.100.0** est retenue et son intégrité est vérifiée par sa signature ;
+  - `Terraform has created a lock file .terraform.lock.hcl` : ce fichier enregistre la
+    version exacte choisie et ses checksums, pour que `terraform init` fasse toujours le
+    même choix par la suite. Il est **versionné** dans ce projet (voir
+    [Notes](#notes)), conformément à la recommandation de la documentation Terraform ;
+  - `Terraform has been successfully initialized!` : le provider est téléchargé dans
+    `.terraform/` (ignoré par Git) et le projet est prêt.
+- `terraform validate` répond `Success! The configuration is valid.` : la syntaxe et la
+  cohérence de la configuration (types de variables, références) sont correctes.
+
+Ces deux commandes ne contactent pas encore l'émulateur Floci : aucune ressource n'est
+définie dans `main.tf` pour l'instant, ce sera fait à l'étape suivante.
+
+### 5. Différence entre le vrai Cloud Provider et Floci
+
+| | Vrai AWS | Floci |
+|---|---|---|
+| Endpoints | URL officielles d'AWS (par défaut) | `http://localhost:4566`, fixé par le bloc `endpoints` |
+| Identifiants | Vraies clés, rôle IAM ou SSO, à protéger | Valeurs factices |
+| Vérifications de démarrage | Appel au service STS, au service de métadonnées EC2 | Désactivées (`skip_*`) |
+| Adressage S3 | Style virtuel (`bucket.s3.amazonaws.com`) | Path-style (`localhost:4566/bucket`) |
+| Compte et coût | Vrai compte AWS, facturation | Aucun compte, gratuit, entièrement local |
+
+**Le code des ressources reste identique** (`aws_s3_bucket`, `aws_dynamodb_table`, écrites
+à l'étape suivante) : seul le bloc `provider` change. Il suffirait de retirer le bloc
+`endpoints` et les options `skip_*`, et de fournir de vraies clés, pour que la même
+configuration vise le véritable AWS.
+
 ## Notes
 
 - Le fichier `.terraform.lock.hcl` est **versionné** (il n'est pas dans le `.gitignore`),
