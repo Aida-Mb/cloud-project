@@ -7,3 +7,13 @@ variable "floci_endpoint" {
   type        = string
   description = "URL de l'endpoint local de Floci (émulateur AWS)"
 }
+
+variable "project_name" {
+  type        = string
+  description = "Nom du projet"
+}
+
+variable "environment" {
+  type        = string
+  description = "Environnement"
+}

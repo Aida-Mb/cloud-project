@@ -8,11 +8,11 @@ reproduire le projet.
 ## Sommaire
 
 - [Provider choisi](#provider-choisi)
-- [Prérequis](#prérequis)
 - [Étape 1 : Installation et lancement de Floci](#étape-1--installation-et-lancement-de-floci)
 - [Étape 2 :  Lancement de Floci UI](#étape-2--lancement-de-floci-ui)
 - [Étape 3 :  Choix du provider et des services](#étape-3--choix-du-provider-et-des-services)
 - [Étape 4 : Création du projet Terraform](#étape-4--création-du-projet-terraform)
+- [Étape 5 : Configuration du provider](#étape-5--configuration-du-provider)
 - [Notes](#notes)
 - [Références](#références)
 
@@ -619,6 +619,72 @@ définie dans `main.tf` pour l'instant, ce sera fait à l'étape suivante.
 à l'étape suivante) : seul le bloc `provider` change. Il suffirait de retirer le bloc
 `endpoints` et les options `skip_*`, et de fournir de vraies clés, pour que la même
 configuration vise le véritable AWS.
+
+
+---
+
+## Étapes 6 à 8 : Variables, `terraform.tfvars` et `locals`
+
+Fichiers concernés : [`variables.tf`](variables.tf), [`terraform.tfvars`](terraform.tfvars),
+[`locals.tf`](locals.tf).
+
+### 1. Variables du projet — `variables.tf`
+
+En plus de `aws_region` et `floci_endpoint` (étape 5, configuration du provider),
+`variables.tf` déclare deux variables propres au projet :
+
+| Variable | Rôle |
+|---|---|
+| `project_name` | Nom du projet, utilisé dans le nom des ressources |
+| `environment` | Environnement (`dev`, `prod`...) |
+
+Le sujet demande que les valeurs ne soient pas écrites en dur dans les ressources : ces
+deux variables serviront à construire automatiquement le nom des ressources (bucket S3,
+table DynamoDB), via le `local` défini plus bas, au lieu de répéter une chaîne de
+caractères dans chaque ressource.
+
+### 2. Valeurs des variables — `terraform.tfvars`
+
+```hcl
+project_name = "cloud-project"
+environment  = "dev"
+```
+
+Ce fichier donne une valeur à chaque variable déclarée dans `variables.tf`. Il est chargé
+**automatiquement** par Terraform (`terraform plan`, `terraform apply`...), sans option en
+ligne de commande, car il porte ce nom réservé.
+
+### 3. Une valeur calculée — `locals.tf`
+
+`locals.tf` définit `resource_prefix`, qui combine les deux variables du projet :
+
+- `variable` est une **entrée** de la configuration : sa valeur vient de l'extérieur
+  (ici, de `terraform.tfvars`).
+- `local` est une **valeur calculée** à partir d'autres valeurs (variables, autres
+  `locals`...) : on ne peut pas lui donner de valeur depuis `terraform.tfvars`, elle est
+  toujours dérivée dans le code.
+
+Avec les valeurs ci-dessus, `local.resource_prefix` vaut `"cloud-project-dev"`. Le
+calculer une seule fois dans un `local` évite de répéter la même concaténation dans
+chaque ressource, et garantit que toutes les ressources du projet utilisent exactement le
+même préfixe. Il sera utilisé dans le nom du bucket S3 et de la table DynamoDB, à
+l'[étape 9](#étape-9--création-des-modules).
+
+### 4. Valider
+
+```bash
+terraform fmt
+terraform validate
+```
+
+![terraform validate après ajout des variables et des locals](screenshots/etape6-8/validate.png)
+
+**Ce que montre la capture :** `terraform fmt` a reformaté `terraform.tfvars`
+(alignement des `=`), et `terraform validate` répond `Success! The configuration is
+valid.` La validation réussit même si `project_name`, `environment` et
+`resource_prefix` ne sont encore utilisés dans aucune ressource : Terraform accepte des
+variables et des `locals` déclarés à l'avance, non encore utilisés. Ils prendront leur
+utilité à l'étape suivante.
 
 ## Notes
 
