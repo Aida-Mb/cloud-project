@@ -8,14 +8,20 @@ reproduire le projet.
 ## Sommaire
 
 - [Provider choisi](#provider-choisi)
+- [Prérequis](#prérequis)
 - [Étape 1 : Installation et lancement de Floci](#étape-1--installation-et-lancement-de-floci)
-- [Étape 2 :  Lancement de Floci UI](#étape-2--lancement-de-floci-ui)
-- [Étape 3 :  Choix du provider et des services](#étape-3--choix-du-provider-et-des-services)
+- [Étape 2 : Lancement de Floci UI](#étape-2--lancement-de-floci-ui)
+- [Étape 3 : Choix du provider et des services](#étape-3--choix-du-provider-et-des-services)
 - [Étape 4 : Création du projet Terraform](#étape-4--création-du-projet-terraform)
 - [Étape 5 : Configuration du provider](#étape-5--configuration-du-provider)
+- [Étapes 6 à 8 : Variables, `terraform.tfvars` et `locals`](#étapes-6-à-8--variables-terraformtfvars-et-locals)
+- [Étape 9 : Création des modules](#étape-9--création-des-modules)
+- [Étape 10 : Outputs](#étape-10--outputs)
+- [Étape 11 : Validation et déploiement](#étape-11--validation-et-déploiement)
+- [Étape 12 : Destruction](#étape-12--destruction)
+- [Dépannage](#dépannage)
 - [Notes](#notes)
 - [Références](#références)
-
 
 ## Provider choisi
 
