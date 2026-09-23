@@ -834,6 +834,132 @@ Le projet Terraform est désormais complet : provider (étape 5), variables et
 `terraform.tfvars` (étapes 6-7), `locals` (étape 8), modules (étape 9) et outputs
 (étape 10). Reste le déploiement.
 
+---
+
+## Étape 11 : Validation et déploiement
+
+### 1. Vérifications préalables
+
+```bash
+docker ps
+terraform init
+terraform fmt
+terraform validate
+```
+
+Le conteneur `floci` doit être `healthy` avant tout déploiement, puisque `apply`
+contactera réellement l'émulateur. `init`, `fmt` et `validate` ont déjà été détaillés aux
+étapes précédentes ; ils sont relancés ici par sécurité, comme le demande le sujet.
+
+### 2. Prévisualiser — `terraform plan`
+
+```bash
+terraform plan
+```
+
+![Plan Terraform : deux ressources à créer](screenshots/etape11/plan.png)
+
+**Ce que montre la capture :** `terraform plan` compare le code, l'état connu de
+Terraform (encore vide, aucun `apply` n'a été fait) et la réalité côté Floci, sans rien
+créer. Chaque ligne précédée de `+` indique une **création** prévue (les autres symboles
+possibles sont `~` pour une modification et `-` pour une destruction) :
+
+- `module.database.aws_dynamodb_table.this will be created`, avec
+  `name = "cloud-project-dev-table"`, `billing_mode = "PAY_PER_REQUEST"` et
+  `hash_key = "id"` ;
+- `module.storage.aws_s3_bucket.this will be created`, avec
+  `bucket = "cloud-project-dev-bucket"`.
+
+Les deux noms confirment que `local.resource_prefix` (étape 8) et les suffixes
+`-bucket`/`-table` (étape 9) fonctionnent comme prévu, sans aucune valeur écrite en dur.
+Les champs marqués `(known after apply)` (l'`arn`, l'`id`...) ne peuvent être connus
+qu'une fois la ressource réellement créée. Le résumé final,
+`Plan: 2 to add, 0 to change, 0 to destroy`, confirme qu'aucune autre action n'est
+prévue.
+
+### 3. Déployer — `terraform apply`
+
+```bash
+terraform apply
+```
+
+Terraform réaffiche le même plan, puis demande une confirmation explicite :
+
+```text
+Do you want to perform these actions?
+  Only 'yes' will be accepted to approve.
+
+  Enter a value: yes
+```
+
+Seule la réponse `yes`, en toutes lettres, déclenche la création : c'est la seule étape
+du projet qui modifie réellement l'état de Floci.
+
+![Apply Terraform : création des deux ressources](screenshots/etape11/apply.png)
+
+**Ce que montre la capture :**
+
+```text
+module.database.aws_dynamodb_table.this: Creating...
+module.storage.aws_s3_bucket.this: Creating...
+module.database.aws_dynamodb_table.this: Creation complete after 0s [id=cloud-project-dev-table]
+module.storage.aws_s3_bucket.this: Creation complete after 0s [id=cloud-project-dev-bucket]
+
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+database_name = "cloud-project-dev-table"
+storage_name = "cloud-project-dev-bucket"
+```
+
+- Les deux ressources sont créées en parallèle (`Creating...` sur les deux lignes), puis
+  confirmées (`Creation complete`) avec leur identifiant réel entre crochets.
+- Le temps de création (`0s`) s'explique par l'émulation locale : pas de vrai
+  provisionnement matériel ni de latence réseau vers un datacenter.
+- `Resources: 2 added, 0 changed, 0 destroyed` correspond exactement au plan annoncé.
+- Les deux `outputs` définis à l'étape 10 affichent enfin leur **valeur réelle** :
+  `cloud-project-dev-table` et `cloud-project-dev-bucket`. C'est la preuve que la chaîne
+  complète `terraform.tfvars` → `variables` → `locals` → `modules` → `outputs`
+  fonctionne de bout en bout.
+
+### 4. Vérifier dans Floci UI
+
+Sur <http://localhost:4500>, les deux ressources apparaissent bien.
+
+**Vue d'ensemble** (`/console/aws`) :
+
+![Deux services avec 1 ressource chacun dans Floci UI](screenshots/resources.png)
+
+Les cartes **Storage** et **DynamoDB** affichent chacune **`1 resource`** : exactement le
+résultat attendu après un `terraform apply` qui a créé une ressource par module
+(`Apply complete! Resources: 2 added`). Les autres services du provider AWS restent à
+`0 resources` (à l'exception de *Compute*, qui affiche des ressources de référence de
+l'environnement, déjà présentes avant tout déploiement — voir
+[Étape 2](#étape-2--lancement-de-floci-ui)), ce qui confirme que seules les deux
+ressources du projet ont été créées.
+
+**Détail — Storage** (`/cloud-explorer/aws/storage`) :
+
+![Bucket S3 visible dans Floci UI](screenshots/etape11/storage-detail.png)
+
+Le bucket **`cloud-project-dev-bucket`** apparaît, type `bucket`, cloud `aws`, créé le
+`2026-09-23T21:06:58.000Z` — un horodatage qui correspond au moment exact du
+`terraform apply` ci-dessus.
+
+**Détail — DynamoDB** (`/cloud-explorer/aws/nosql`) :
+
+![Table DynamoDB visible dans Floci UI](screenshots/etape11/dynamodb-detail.png)
+
+La table **`cloud-project-dev-table`** apparaît, statut **`ACTIVE`**, région
+`us-east-1`, créée le `2026-09-23T21:06:59.000Z`, une seconde après le bucket — l'ordre
+exact observé dans les logs de `terraform apply` (`Creating...` sur les deux ressources
+quasi simultanément).
+
+Le nom de chaque ressource, dans l'UI, correspond exactement à celui annoncé par
+`terraform plan` et confirmé par les `outputs` de `terraform apply` : la boucle
+configuration → déploiement → vérification est complète.
+
 ## Notes
 
 - Le fichier `.terraform.lock.hcl` est **versionné** (il n'est pas dans le `.gitignore`),
