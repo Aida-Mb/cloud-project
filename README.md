@@ -13,6 +13,7 @@ reproduire le projet.
 - [Étape 3 :  Choix du provider et des services](#étape-3--choix-du-provider-et-des-services)
 - [Étape 4 : Création du projet Terraform](#étape-4--création-du-projet-terraform)
 - [Étape 5 : Configuration du provider](#étape-5--configuration-du-provider)
+- [Étapes 6 à 8 : Variables, `terraform.tfvars` et `locals`](#étapes-6-à-8--variables,-`terraform.tfvars`-et-`locals`)
 - [Notes](#notes)
 - [Références](#références)
 
@@ -685,6 +686,104 @@ valid.` La validation réussit même si `project_name`, `environment` et
 `resource_prefix` ne sont encore utilisés dans aucune ressource : Terraform accepte des
 variables et des `locals` déclarés à l'avance, non encore utilisés. Ils prendront leur
 utilité à l'étape suivante.
+
+---
+
+## Étape 9 : Création des modules
+
+Fichiers concernés : [`main.tf`](main.tf), [`modules/storage/`](modules/storage),
+[`modules/database/`](modules/database).
+
+### Pourquoi des modules
+
+Un module regroupe les ressources d'un service (ici, une ressource principale chacun) avec
+ses propres entrées (`variables.tf`) et sorties (`outputs.tf`). Il sépare la
+**configuration générale** du projet (racine) de la **définition de chaque service**
+(modules), et permet de réutiliser le même code pour plusieurs instances si besoin, en
+changeant simplement les valeurs passées en entrée.
+
+### Module `storage` — Amazon S3
+
+`modules/storage/main.tf` définit une seule ressource, `aws_s3_bucket`, dont le nom vient
+d'une variable d'entrée `name` (`modules/storage/variables.tf`). Le module expose ensuite
+ce nom via `output "resource_name"` (`modules/storage/outputs.tf`), pour qu'il soit lisible
+depuis le reste du projet.
+
+### Module `database` — Amazon DynamoDB
+
+`modules/database/main.tf` définit une ressource `aws_dynamodb_table`, avec :
+
+- `billing_mode = "PAY_PER_REQUEST"` : facturation à l'usage, sans capacité à provisionner
+  à l'avance (l'alternative, `PROVISIONED`, demanderait de fixer une capacité de lecture
+  et d'écriture fixe) ;
+- `hash_key = "id"` : DynamoDB est une base clé-valeur, elle a besoin d'une **clé de
+  partition** pour identifier chaque enregistrement ;
+- un bloc `attribute` qui déclare le **type** de cet attribut clé (`S` pour *String*) :
+  DynamoDB exige de déclarer les attributs utilisés comme clés, mais laisse le reste du
+  schéma libre.
+
+Comme pour `storage`, le nom vient d'une variable d'entrée `name`, et le module expose ce
+nom via `output "resource_name"`.
+
+### Appeler les deux modules — `main.tf` (racine)
+
+```hcl
+module "storage" {
+  source = "./modules/storage"
+
+  name = "${local.resource_prefix}-bucket"
+}
+
+module "database" {
+  source = "./modules/database"
+
+  name = "${local.resource_prefix}-table"
+}
+```
+
+- `source = "./modules/storage"` : chemin **local** vers le module (les modules peuvent
+  aussi venir d'un registre ou d'un dépôt Git, ce n'est pas le cas ici).
+- `name = "${local.resource_prefix}-bucket"` : le nom passé au module. C'est ici que tout
+  ce qui a été préparé aux étapes précédentes converge : `local.resource_prefix`
+  (étape 8) vaut `"cloud-project-dev"` avec les valeurs actuelles de `terraform.tfvars`,
+  ce qui donne `cloud-project-dev-bucket` pour le bucket S3 et `cloud-project-dev-table`
+  pour la table DynamoDB. **Aucun nom n'est écrit en dur** dans les ressources : changer
+  `project_name` ou `environment` dans `terraform.tfvars` renomme tout le projet.
+
+Le sujet donne comme exemple `name = local.resource_prefix` (la même valeur pour les deux
+modules), ce qui est valable : S3 et DynamoDB ont chacun leur propre espace de noms, donc
+un bucket et une table peuvent porter le même nom sans conflit. J'ai choisi d'ajouter les
+suffixes `-bucket` et `-table` pour que chaque ressource ait un nom explicite,
+distinguable dans Floci UI et dans les sorties de Terraform (`plan`, `apply`, `outputs`).
+
+### Initialiser et valider
+
+Un nouveau module demande de relancer `terraform init` :
+
+```bash
+terraform fmt
+terraform init
+terraform validate
+```
+
+![Initialisation avec les deux modules et validation](screenshots/etape9/init-validate.png)
+
+**Ce que montre la capture :**
+
+- `Initializing modules...` avec `- storage in modules/storage` et
+  `- database in modules/database` : Terraform a détecté les deux modules locaux appelés
+  depuis `main.tf`.
+- `Reusing previous version of hashicorp/aws from the dependency lock file` et
+  `Using previously-installed hashicorp/aws v5.100.0` : le provider avait déjà été
+  téléchargé à l'étape 5 (et sa version figée dans `.terraform.lock.hcl`), Terraform le
+  réutilise sans le retélécharger.
+- `Terraform has been successfully initialized!` : le projet, modules compris, est prêt.
+- `terraform validate` répond `Success! The configuration is valid.` : la syntaxe des
+  modules et de leurs appels est correcte.
+
+Ces commandes ne créent encore aucune ressource dans Floci : ce sera l'objet de
+l'[étape 11](#étape-11--validation-et-déploiement), avec `terraform plan` puis
+`terraform apply`.
 
 ## Notes
 
