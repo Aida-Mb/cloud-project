@@ -13,7 +13,6 @@ reproduire le projet.
 - [Étape 3 :  Choix du provider et des services](#étape-3--choix-du-provider-et-des-services)
 - [Étape 4 : Création du projet Terraform](#étape-4--création-du-projet-terraform)
 - [Étape 5 : Configuration du provider](#étape-5--configuration-du-provider)
-- [Étapes 6 à 8 : Variables, `terraform.tfvars` et `locals`](#étapes-6-à-8--variables,-`terraform.tfvars`-et-`locals`)
 - [Notes](#notes)
 - [Références](#références)
 
@@ -784,6 +783,56 @@ terraform validate
 Ces commandes ne créent encore aucune ressource dans Floci : ce sera l'objet de
 l'[étape 11](#étape-11--validation-et-déploiement), avec `terraform plan` puis
 `terraform apply`.
+
+<!-- ============================================================ -->
+<!-- À AJOUTER après l'étape 9, avant "Dépannage"                  -->
+<!-- ============================================================ -->
+
+---
+
+## Étape 10 : Outputs
+
+Fichier concerné : [`outputs.tf`](outputs.tf).
+
+### Deux niveaux d'outputs
+
+Chaque module possède déjà son propre `output "resource_name"` (voir
+[Étape 9](#étape-9--création-des-modules)) : c'est lui qui expose, depuis l'intérieur du
+module, le nom de la ressource créée (`aws_s3_bucket.this.id` ou
+`aws_dynamodb_table.this.id`).
+
+Un module est une boîte fermée : ce qu'il calcule en interne n'est visible depuis
+l'extérieur **que s'il le déclare via son propre `output`**, et cette valeur reste
+elle-même invisible à la racine tant qu'elle n'y est pas **redéclarée**. `outputs.tf`, à
+la racine, expose donc à son tour les deux valeurs :
+
+- `storage_name`, qui vaut `module.storage.resource_name` ;
+- `database_name`, qui vaut `module.database.resource_name`.
+
+`module.storage.resource_name` va chercher la valeur exposée par le module `storage`
+(appelé dans `main.tf` à l'étape 9). Sans cette redéclaration à la racine, le nom du
+bucket et celui de la table resteraient calculés en interne, mais ne s'afficheraient
+jamais après un déploiement.
+
+### Valider
+
+```bash
+terraform fmt
+terraform validate
+```
+
+![terraform validate après ajout des outputs](screenshots/etape10/validate.png)
+
+**Ce que montre la capture :** `terraform validate` répond `Success! The configuration is
+valid.`. La validation vérifie que `module.storage.resource_name` et
+`module.database.resource_name` existent bien dans les modules appelés, mais **pas leur
+valeur réelle** : les noms concrets (`cloud-project-dev-bucket`,
+`cloud-project-dev-table`) ne s'afficheront qu'après un `terraform apply`, à
+l'[étape 11](#étape-11--validation-et-déploiement).
+
+Le projet Terraform est désormais complet : provider (étape 5), variables et
+`terraform.tfvars` (étapes 6-7), `locals` (étape 8), modules (étape 9) et outputs
+(étape 10). Reste le déploiement.
 
 ## Notes
 
