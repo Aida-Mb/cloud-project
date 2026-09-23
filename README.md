@@ -960,6 +960,106 @@ Le nom de chaque ressource, dans l'UI, correspond exactement à celui annoncé p
 `terraform plan` et confirmé par les `outputs` de `terraform apply` : la boucle
 configuration → déploiement → vérification est complète.
 
+
+---
+
+## Étape 12 : Destruction
+
+### 1. Prévisualiser — `terraform plan -destroy`
+
+```bash
+terraform plan -destroy
+```
+
+Même logique que `terraform plan`, mais dans l'autre sens : chaque ligne est précédée de
+`-` au lieu de `+`, pour annoncer une **suppression**. Avant toute action, Terraform
+affiche `Refreshing state...` pour chaque ressource : il interroge Floci afin de
+confirmer qu'elles existent bien telles qu'il les connaît, avant de calculer le plan.
+
+Le résumé, `Plan: 0 to add, 0 to change, 2 to destroy`, annonce la suppression des deux
+ressources créées à l'[étape 11](#étape-11--validation-et-déploiement). Le détail de
+chaque ressource montre la notation `valeur -> null` : chaque attribut passera de sa
+valeur actuelle à « rien », par exemple
+`arn = "arn:aws:dynamodb:us-east-1:000000000000:table/cloud-project-dev-table" -> null`
+pour la table DynamoDB (le `000000000000` est le compte factice de Floci, déjà repéré à
+l'[étape 1](#étape-1--installation-et-lancement-de-floci)).
+
+### 2. Détruire — `terraform destroy`
+
+```bash
+terraform destroy
+```
+
+Terraform réaffiche le même plan, puis demande une confirmation explicite, distincte de
+celle de `apply` :
+
+```text
+Do you really want to destroy all resources?
+  Terraform will destroy all your managed infrastructure, as shown above.
+  There is no undo. Only 'yes' will be accepted to confirm.
+
+  Enter a value: yes
+```
+
+Seule la réponse `yes`, en toutes lettres, déclenche la suppression. Sur un vrai AWS,
+cette action serait irréversible (*"There is no undo"*) et potentiellement coûteuse en
+données perdues ; avec Floci, elle est sans risque puisque l'environnement est local et
+jetable — mais le réflexe de vérifier le plan avant de confirmer reste le même que sur un
+vrai projet.
+
+![terraform destroy : suppression des deux ressources](screenshots/etape12/destroy.png)
+
+**Ce que montre la capture :**
+
+```text
+module.storage.aws_s3_bucket.this: Destroying... [id=cloud-project-dev-bucket]
+module.database.aws_dynamodb_table.this: Destroying... [id=cloud-project-dev-table]
+module.storage.aws_s3_bucket.this: Destruction complete after 0s
+module.database.aws_dynamodb_table.this: Destruction complete after 0s
+
+Destroy complete! Resources: 2 destroyed.
+```
+
+Les deux ressources sont détruites en parallèle (`Destroying...` sur les deux lignes),
+puis confirmées (`Destruction complete`). `Resources: 2 destroyed` correspond exactement
+au plan annoncé. Les `outputs` `database_name` et `storage_name` repassent eux aussi à
+`null`, cohérence logique avec la disparition des ressources qu'ils exposaient.
+
+### 3. Vérifier dans Floci UI
+
+Sur <http://localhost:4500/console/aws>, les cartes **Storage** et **DynamoDB**
+affichent maintenant **`0 resources`**, en symétrie exacte avec la vue d'ensemble de
+l'étape 11 qui en affichait `1` pour chacune.
+
+![Storage, Database et DynamoDB repassent à 0 ressource après terraform destroy](screenshots/destroy.png)
+
+Les pages détaillées confirment la disparition, avec un message explicite de l'interface :
+
+![Page Storage : No S3 Storage found](screenshots/etape12/storage-empty.png)
+
+Sur `/cloud-explorer/aws/storage` : **`No S3 Storage found.`**,
+*« The connected runtime did not return any S3 Storage resources. »* — le bucket
+`cloud-project-dev-bucket`, présent à l'étape 11, n'existe plus.
+
+![Page DynamoDB : No DynamoDB found](screenshots/etape12/dynamodb-empty.png)
+
+Sur `/cloud-explorer/aws/nosql` : **`No DynamoDB found.`**,
+*« The connected runtime did not return any DynamoDB resources. »* — la table
+`cloud-project-dev-table` n'existe plus non plus.
+
+### 4. Vérification complémentaire — l'état Terraform
+
+```bash
+terraform show
+```
+
+Sans argument, cette commande affiche l'état actuel connu de Terraform
+(`terraform.tfstate`). Après un `destroy` réussi, elle répond
+`The state file is empty. No resources are represented.` : Terraform lui-même confirme
+qu'il ne gère plus aucune ressource, en cohérence avec ce que montre Floci UI.
+
+---
+
 ## Notes
 
 - Le fichier `.terraform.lock.hcl` est **versionné** (il n'est pas dans le `.gitignore`),
