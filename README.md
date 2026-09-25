@@ -1107,10 +1107,20 @@ qu'il ne gère plus aucune ressource, en cohérence avec ce que montre Floci UI.
   conformément à la documentation Terraform : il garantit les mêmes versions de provider
   pour tous.
 
+
 ## Références
 
+### Floci
 - Floci : <https://floci.io/> et <https://github.com/floci-io/floci>
 - Floci CLI : <https://github.com/floci-io/floci-cli>
 - Floci UI : <https://github.com/floci-io/floci-ui>
-- Terraform : <https://developer.hashicorp.com/terraform/docs>
+
+### Terraform
+- Documentation générale : <https://developer.hashicorp.com/terraform/docs>
+- Installation (tutoriel officiel) : <https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli>
 - Dependency Lock File : <https://developer.hashicorp.com/terraform/language/files/dependency-lock>
+- Provider AWS — ressource `aws_s3_bucket` : <https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket>
+- Provider AWS — ressource `aws_dynamodb_table` : <https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/dynamodb_table>
+
+### Outils
+- terraform-docs : <https://terraform-docs.io/> et <https://github.com/terraform-docs/terraform-docs>
