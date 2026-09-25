@@ -977,16 +977,16 @@ Les cartes **Storage** et **DynamoDB** affichent chacune **`1 resource`** : exac
 résultat attendu après un `terraform apply` qui a créé une ressource par module
 (`Apply complete! Resources: 2 added`). Les autres services du provider AWS restent à
 `0 resources` (à l'exception de *Compute*, qui affiche des ressources de référence de
-l'environnement, déjà présentes avant tout déploiement — voir
+l'environnement, déjà présentes avant tout déploiement voir
 [Étape 2](#étape-2--lancement-de-floci-ui)), ce qui confirme que seules les deux
 ressources du projet ont été créées.
 
-**Détail — Storage** (`/cloud-explorer/aws/storage`) :
+**Détail : Storage** (`/cloud-explorer/aws/storage`) :
 
 ![Bucket S3 visible dans Floci UI](screenshots/etape11/storage-detail.png)
 
 Le bucket **`cloud-project-dev-bucket`** apparaît, type `bucket`, cloud `aws`, créé le
-`2026-09-23T21:06:58.000Z` — un horodatage qui correspond au moment exact du
+`2026-09-23T21:06:58.000Z` : un horodatage qui correspond au moment exact du
 `terraform apply` ci-dessus.
 
 **Détail : DynamoDB** (`/cloud-explorer/aws/nosql`) :
