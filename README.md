@@ -19,7 +19,6 @@ reproduire le projet.
 - [Étape 10 : Outputs](#étape-10--outputs)
 - [Étape 11 : Validation et déploiement](#étape-11--validation-et-déploiement)
 - [Étape 12 : Destruction](#étape-12--destruction)
-- [Dépannage](#dépannage)
 - [Notes](#notes)
 - [Références](#références)
 
@@ -42,6 +41,18 @@ reproduire le projet.
   (`aws_s3_bucket`, `aws_dynamodb_table`), ce qui permet de se concentrer sur
   l'organisation du projet (modules, variables, locals, outputs).
 
+
+---
+
+## Prérequis
+
+- Windows avec **WSL2 (Ubuntu)** ; toutes les commandes sont exécutées dans le terminal
+  Ubuntu, depuis `~/cloud-project`
+- **Docker Desktop** avec l'intégration WSL activée (Docker 28.5.1)
+- **Terraform** v1.16.3 (installé via le dépôt officiel de HashiCorp, voir
+  [Étape 4](#étape-4--création-du-projet-terraform))
+- Une connexion Internet (téléchargement du CLI Floci, de l'image Docker, du provider
+  Terraform)
 
 ---
 
@@ -390,9 +401,9 @@ sont signés, et `apt` pourra ensuite proposer les mises à jour.
 sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
 ```
 
-![Préparation du système : gnupg et software-properties-common](screenshots/etape4/prerequis-apt.png)
 
-**Ce que montre la capture :**
+
+**Durant l'installation on voit :**
 
 - `apt-get update` rafraîchit la liste des paquets disponibles depuis les dépôts Ubuntu
   (`noble` est le nom de code d'Ubuntu 24.04).
@@ -541,13 +552,13 @@ configuration ; les noms sont une convention) :
 Fichiers concernés : [`versions.tf`](versions.tf), [`variables.tf`](variables.tf),
 [`terraform.tfvars`](terraform.tfvars), [`providers.tf`](providers.tf).
 
-### 1. `versions.tf` — fixer les versions
+### 1. `versions.tf` : fixer les versions
 
 Fixe la version minimale de Terraform (`>= 1.5.0`, Terraform installé : v1.16.3) et
 indique où télécharger le provider AWS (`hashicorp/aws`, série `~> 5.0`, c'est-à-dire
 toute version 5.x mais pas 6.x).
 
-### 2. `variables.tf` et `terraform.tfvars` — variables du provider
+### 2. `variables.tf` et `terraform.tfvars` : variables du provider
 
 Deux variables sont nécessaires pour que le provider sache où envoyer ses requêtes :
 
@@ -560,7 +571,7 @@ Deux variables sont nécessaires pour que le provider sache où envoyer ses requ
 leur donne une valeur. Ce dernier est chargé automatiquement par Terraform, sans option
 en ligne de commande, car il porte ce nom réservé.
 
-### 3. `providers.tf` — rediriger Terraform vers Floci
+### 3. `providers.tf` : rediriger Terraform vers Floci
 
 Ce fichier configure le provider `aws` pour qu'il envoie ses requêtes à Floci au lieu des
 serveurs officiels d'AWS. Trois idées principales :
@@ -634,7 +645,7 @@ configuration vise le véritable AWS.
 Fichiers concernés : [`variables.tf`](variables.tf), [`terraform.tfvars`](terraform.tfvars),
 [`locals.tf`](locals.tf).
 
-### 1. Variables du projet — `variables.tf`
+### 1. Variables du projet : `variables.tf`
 
 En plus de `aws_region` et `floci_endpoint` (étape 5, configuration du provider),
 `variables.tf` déclare deux variables propres au projet :
@@ -644,12 +655,11 @@ En plus de `aws_region` et `floci_endpoint` (étape 5, configuration du provider
 | `project_name` | Nom du projet, utilisé dans le nom des ressources |
 | `environment` | Environnement (`dev`, `prod`...) |
 
-Le sujet demande que les valeurs ne soient pas écrites en dur dans les ressources : ces
-deux variables serviront à construire automatiquement le nom des ressources (bucket S3,
+Ces deux variables serviront à construire automatiquement le nom des ressources (bucket S3,
 table DynamoDB), via le `local` défini plus bas, au lieu de répéter une chaîne de
 caractères dans chaque ressource.
 
-### 2. Valeurs des variables — `terraform.tfvars`
+### 2. Valeurs des variables : `terraform.tfvars`
 
 ```hcl
 project_name = "cloud-project"
@@ -660,7 +670,7 @@ Ce fichier donne une valeur à chaque variable déclarée dans `variables.tf`. I
 **automatiquement** par Terraform (`terraform plan`, `terraform apply`...), sans option en
 ligne de commande, car il porte ce nom réservé.
 
-### 3. Une valeur calculée — `locals.tf`
+### 3. Une valeur calculée : `locals.tf`
 
 `locals.tf` définit `resource_prefix`, qui combine les deux variables du projet :
 
@@ -707,14 +717,14 @@ ses propres entrées (`variables.tf`) et sorties (`outputs.tf`). Il sépare la
 (modules), et permet de réutiliser le même code pour plusieurs instances si besoin, en
 changeant simplement les valeurs passées en entrée.
 
-### Module `storage` — Amazon S3
+### Module `storage` : Amazon S3
 
 `modules/storage/main.tf` définit une seule ressource, `aws_s3_bucket`, dont le nom vient
 d'une variable d'entrée `name` (`modules/storage/variables.tf`). Le module expose ensuite
 ce nom via `output "resource_name"` (`modules/storage/outputs.tf`), pour qu'il soit lisible
 depuis le reste du projet.
 
-### Module `database` — Amazon DynamoDB
+### Module `database` : Amazon DynamoDB
 
 `modules/database/main.tf` définit une ressource `aws_dynamodb_table`, avec :
 
@@ -730,7 +740,7 @@ depuis le reste du projet.
 Comme pour `storage`, le nom vient d'une variable d'entrée `name`, et le module expose ce
 nom via `output "resource_name"`.
 
-### Appeler les deux modules — `main.tf` (racine)
+### Appeler les deux modules : `main.tf` (racine)
 
 ```hcl
 module "storage" {
@@ -761,7 +771,7 @@ un bucket et une table peuvent porter le même nom sans conflit. J'ai choisi d'a
 suffixes `-bucket` et `-table` pour que chaque ressource ait un nom explicite,
 distinguable dans Floci UI et dans les sorties de Terraform (`plan`, `apply`, `outputs`).
 
-### Documentation générée automatiquement — `terraform-docs` (bonus)
+### Documentation générée automatiquement : `terraform-docs` 
 
 Chaque module possède un `README.md` généré automatiquement avec
 [`terraform-docs`](https://terraform-docs.io/), directement depuis le code
@@ -796,7 +806,7 @@ fichier généré contient quatre tableaux, construits automatiquement à partir
   `aws_dynamodb_table.this`), avec un lien direct vers sa documentation officielle sur le
   Registry Terraform ;
 - **Inputs** : les variables d'entrée du module (`name`), avec leur type, leur
-  description et si elles sont obligatoires — reprises telles qu'écrites dans
+  description et si elles sont obligatoires, reprises telles qu'écrites dans
   `variables.tf` ;
 - **Outputs** : les sorties du module (`resource_name`), reprises depuis `outputs.tf`.
 
@@ -897,7 +907,7 @@ Le conteneur `floci` doit être `healthy` avant tout déploiement, puisque `appl
 contactera réellement l'émulateur. `init`, `fmt` et `validate` ont déjà été détaillés aux
 étapes précédentes ; ils sont relancés ici par sécurité, comme le demande le sujet.
 
-### 2. Prévisualiser — `terraform plan`
+### 2. Prévisualiser : `terraform plan`
 
 ```bash
 terraform plan
@@ -923,7 +933,7 @@ qu'une fois la ressource réellement créée. Le résumé final,
 `Plan: 2 to add, 0 to change, 0 to destroy`, confirme qu'aucune autre action n'est
 prévue.
 
-### 3. Déployer — `terraform apply`
+### 3. Déployer : `terraform apply`
 
 ```bash
 terraform apply
@@ -944,20 +954,6 @@ du projet qui modifie réellement l'état de Floci.
 ![Apply Terraform : création des deux ressources](screenshots/etape11/apply.png)
 
 **Ce que montre la capture :**
-
-```text
-module.database.aws_dynamodb_table.this: Creating...
-module.storage.aws_s3_bucket.this: Creating...
-module.database.aws_dynamodb_table.this: Creation complete after 0s [id=cloud-project-dev-table]
-module.storage.aws_s3_bucket.this: Creation complete after 0s [id=cloud-project-dev-bucket]
-
-Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
-
-Outputs:
-
-database_name = "cloud-project-dev-table"
-storage_name = "cloud-project-dev-bucket"
-```
 
 - Les deux ressources sont créées en parallèle (`Creating...` sur les deux lignes), puis
   confirmées (`Creation complete`) avec leur identifiant réel entre crochets.
@@ -993,12 +989,12 @@ Le bucket **`cloud-project-dev-bucket`** apparaît, type `bucket`, cloud `aws`, 
 `2026-09-23T21:06:58.000Z` — un horodatage qui correspond au moment exact du
 `terraform apply` ci-dessus.
 
-**Détail — DynamoDB** (`/cloud-explorer/aws/nosql`) :
+**Détail : DynamoDB** (`/cloud-explorer/aws/nosql`) :
 
 ![Table DynamoDB visible dans Floci UI](screenshots/etape11/dynamodb-detail.png)
 
 La table **`cloud-project-dev-table`** apparaît, statut **`ACTIVE`**, région
-`us-east-1`, créée le `2026-09-23T21:06:59.000Z`, une seconde après le bucket — l'ordre
+`us-east-1`, créée le `2026-09-23T21:06:59.000Z`, une seconde après le bucket, l'ordre
 exact observé dans les logs de `terraform apply` (`Creating...` sur les deux ressources
 quasi simultanément).
 
@@ -1011,7 +1007,7 @@ configuration → déploiement → vérification est complète.
 
 ## Étape 12 : Destruction
 
-### 1. Prévisualiser — `terraform plan -destroy`
+### 1. Prévisualiser : `terraform plan -destroy`
 
 ```bash
 terraform plan -destroy
@@ -1030,7 +1026,7 @@ valeur actuelle à « rien », par exemple
 pour la table DynamoDB (le `000000000000` est le compte factice de Floci, déjà repéré à
 l'[étape 1](#étape-1--installation-et-lancement-de-floci)).
 
-### 2. Détruire — `terraform destroy`
+### 2. Détruire : `terraform destroy`
 
 ```bash
 terraform destroy
@@ -1050,12 +1046,11 @@ Do you really want to destroy all resources?
 Seule la réponse `yes`, en toutes lettres, déclenche la suppression. Sur un vrai AWS,
 cette action serait irréversible (*"There is no undo"*) et potentiellement coûteuse en
 données perdues ; avec Floci, elle est sans risque puisque l'environnement est local et
-jetable — mais le réflexe de vérifier le plan avant de confirmer reste le même que sur un
+jetable mais le réflexe de vérifier le plan avant de confirmer reste le même que sur un
 vrai projet.
 
-![terraform destroy : suppression des deux ressources](screenshots/etape12/destroy.png)
 
-**Ce que montre la capture :**
+**On obtient :**
 
 ```text
 module.storage.aws_s3_bucket.this: Destroying... [id=cloud-project-dev-bucket]
@@ -1084,16 +1079,16 @@ Les pages détaillées confirment la disparition, avec un message explicite de l
 ![Page Storage : No S3 Storage found](screenshots/etape12/storage-empty.png)
 
 Sur `/cloud-explorer/aws/storage` : **`No S3 Storage found.`**,
-*« The connected runtime did not return any S3 Storage resources. »* — le bucket
+*« The connected runtime did not return any S3 Storage resources. »*. Le bucket
 `cloud-project-dev-bucket`, présent à l'étape 11, n'existe plus.
 
 ![Page DynamoDB : No DynamoDB found](screenshots/etape12/dynamodb-empty.png)
 
 Sur `/cloud-explorer/aws/nosql` : **`No DynamoDB found.`**,
-*« The connected runtime did not return any DynamoDB resources. »* — la table
+*« The connected runtime did not return any DynamoDB resources. »*. La table
 `cloud-project-dev-table` n'existe plus non plus.
 
-### 4. Vérification complémentaire — l'état Terraform
+### 4. Vérification complémentaire : l'état Terraform
 
 ```bash
 terraform show
