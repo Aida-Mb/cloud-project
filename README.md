@@ -761,6 +761,51 @@ un bucket et une table peuvent porter le même nom sans conflit. J'ai choisi d'a
 suffixes `-bucket` et `-table` pour que chaque ressource ait un nom explicite,
 distinguable dans Floci UI et dans les sorties de Terraform (`plan`, `apply`, `outputs`).
 
+### Documentation générée automatiquement — `terraform-docs` (bonus)
+
+Chaque module possède un `README.md` généré automatiquement avec
+[`terraform-docs`](https://terraform-docs.io/), directement depuis le code
+(`variables.tf`, `outputs.tf`, ressources utilisées) :
+
+- [modules/storage/README.md](modules/storage/README.md)
+- [modules/database/README.md](modules/database/README.md)
+
+Installation (méthode binaire, documentation officielle) :
+
+```bash
+mkdir -p /tmp/terraform-docs-install
+curl -Lo /tmp/terraform-docs-install/terraform-docs.tar.gz https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-$(uname)-amd64.tar.gz
+tar -xzf /tmp/terraform-docs-install/terraform-docs.tar.gz -C /tmp/terraform-docs-install
+chmod +x /tmp/terraform-docs-install/terraform-docs
+sudo mv /tmp/terraform-docs-install/terraform-docs /usr/local/bin/terraform-docs
+```
+
+Génération, pour chaque module :
+
+```bash
+terraform-docs markdown table --output-file README.md --output-mode inject modules/storage
+terraform-docs markdown table --output-file README.md --output-mode inject modules/database
+```
+
+`--output-mode inject` insère le contenu généré entre des balises
+`<!-- BEGIN_TF_DOCS -->` et `<!-- END_TF_DOCS -->` dans le `README.md` du module. Chaque
+fichier généré contient quatre tableaux, construits automatiquement à partir du code :
+
+- **Providers** : le provider utilisé par le module (`aws`) ;
+- **Resources** : la ressource principale du module (`aws_s3_bucket.this` ou
+  `aws_dynamodb_table.this`), avec un lien direct vers sa documentation officielle sur le
+  Registry Terraform ;
+- **Inputs** : les variables d'entrée du module (`name`), avec leur type, leur
+  description et si elles sont obligatoires — reprises telles qu'écrites dans
+  `variables.tf` ;
+- **Outputs** : les sorties du module (`resource_name`), reprises depuis `outputs.tf`.
+
+L'intérêt de cette génération automatique, plutôt qu'une documentation écrite à la main :
+elle **reste synchronisée avec le code**. Si une variable est ajoutée, renommée ou sa
+description modifiée dans `variables.tf`, il suffit de relancer la commande
+`terraform-docs` correspondante pour que le README du module reflète exactement l'état
+actuel du code, sans risque d'oubli.
+
 ### Initialiser et valider
 
 Un nouveau module demande de relancer `terraform init` :
@@ -789,11 +834,6 @@ terraform validate
 Ces commandes ne créent encore aucune ressource dans Floci : ce sera l'objet de
 l'[étape 11](#étape-11--validation-et-déploiement), avec `terraform plan` puis
 `terraform apply`.
-
-<!-- ============================================================ -->
-<!-- À AJOUTER après l'étape 9, avant "Dépannage"                  -->
-<!-- ============================================================ -->
-
 ---
 
 ## Étape 10 : Outputs
